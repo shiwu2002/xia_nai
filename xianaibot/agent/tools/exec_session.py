@@ -27,6 +27,8 @@ from xianaibot.agent.tools.schema import (  # Schema 构造器
     tool_parameters_schema,
 )
 
+from xianaibot.utils.proc_output import IncrementalProcDecoder  # 流式输出解码（UTF-8 → 本地编码回退）
+
 DEFAULT_YIELD_MS = 1000  # 默认轮询等待毫秒数
 MAX_YIELD_MS = 30_000  # 最大轮询等待毫秒数
 DEFAULT_WAIT_FOR_MS = 10_000  # 默认等待目标输出毫秒数
@@ -120,17 +122,26 @@ class _ExecSession:
         """
         if stream is None:
             return
+        decoder = IncrementalProcDecoder()  # 每条流独立解码，处理块边界截断
         first = True
         while True:
             chunk = await stream.read(4096)
             if not chunk:
                 break
-            text = chunk.decode("utf-8", errors="replace")
+            text = decoder.feed(chunk)
+            if text:
+                if prefix and first:
+                    text = prefix + text  # 仅首个非空文本块加前缀
+                    first = False
+                async with self._lock:
+                    self._chunks.append(text)
+        tail = decoder.finish()
+        if tail:
             if prefix and first:
-                text = prefix + text  # 仅首块加前缀
+                tail = prefix + tail
                 first = False
             async with self._lock:
-                self._chunks.append(text)
+                self._chunks.append(tail)
 
     async def write(self, chars: str) -> str | None:
         """向进程 stdin 写入字符。

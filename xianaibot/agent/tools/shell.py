@@ -57,6 +57,7 @@ from xianaibot.security.workspace_access import (  # 工作区访问控制
     current_tool_workspace,
 )
 from xianaibot.security.workspace_policy import is_path_within  # 路径在工作区内判断
+from xianaibot.utils.proc_output import decode_proc_output  # 子进程输出解码（UTF-8 → 本地编码回退）
 from xianaibot.utils.python_shim import bundled_python_bin_dir  # 冻结环境解释器 shim
 
 _IS_WINDOWS = sys.platform == "win32"  # 是否为 Windows 平台
@@ -374,10 +375,10 @@ class ExecTool(Tool):
             output_parts = []
 
             if stdout:
-                output_parts.append(stdout.decode("utf-8", errors="replace"))
+                output_parts.append(decode_proc_output(stdout))
 
             if stderr:
-                stderr_text = stderr.decode("utf-8", errors="replace")
+                stderr_text = decode_proc_output(stderr)
                 if stderr_text.strip():
                     output_parts.append(f"STDERR:\n{stderr_text}")
 
